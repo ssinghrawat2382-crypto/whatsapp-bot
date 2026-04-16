@@ -1,17 +1,19 @@
 from flask import Flask, request, abort
 from twilio.twiml.messaging_response import MessagingResponse
 import os
-import openai
+import google.generativeai as genai
 
 app = Flask(__name__)
 
 # =====================================================
-# 🔐 OPENAI CONFIG (AI BRAIN)
+# 🔐 GEMINI CONFIG
 # =====================================================
-openai.api_key = os.getenv("OPENAI_API_KEY")  # set in Render
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # =====================================================
-# 🧠 SIMPLE SESSION MEMORY (OPTIONAL)
+# 🧠 SIMPLE MEMORY (OPTIONAL)
 # =====================================================
 user_memory = {}
 
@@ -20,25 +22,25 @@ user_memory = {}
 # =====================================================
 @app.route("/", methods=["GET"])
 def home():
-    return "AI SaaS WhatsApp Bot Running 🚀", 200
+    return "Gemini SaaS Bot Running 🚀", 200
 
 # =====================================================
-# 🔗 WEBHOOK VERIFICATION
+# 🔗 WEBHOOK CHECK
 # =====================================================
 @app.route("/webhook", methods=["GET"])
 def verify():
     return "Webhook Active ✅", 200
 
 # =====================================================
-# 🤖 AI BRAIN FUNCTION
+# 🤖 GEMINI AI BRAIN
 # =====================================================
-def ai_brain(user_msg, user_id):
-    try:
+def gemini_brain(user_msg, user_id):
 
+    try:
         context = user_memory.get(user_id, "")
 
         prompt = f"""
-You are a WhatsApp SaaS assistant for business automation.
+You are a WhatsApp SaaS assistant for businesses.
 
 Context:
 {context}
@@ -47,31 +49,23 @@ User message:
 {user_msg}
 
 Rules:
-- Be short and professional
-- Focus on business automation (appointments, sales, support)
-- Give structured replies
+- Give short, clear business answers
+- Focus on automation, booking, pricing, support
 """
 
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a SaaS WhatsApp business assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
+        response = model.generate_content(prompt)
 
-        reply = response["choices"][0]["message"]["content"]
+        reply = response.text
 
-        # store context (light memory)
         user_memory[user_id] = user_msg
 
         return reply
 
     except Exception as e:
-        return "⚠️ AI service temporarily unavailable. Please try again."
+        return "⚠️ AI temporarily unavailable"
 
 # =====================================================
-# 📩 MAIN WEBHOOK (SAAS + AI HYBRID)
+# 📩 WEBHOOK (SAAS + GEMINI)
 # =====================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -85,44 +79,40 @@ def webhook():
     response = MessagingResponse()
     msg = response.message()
 
-    # =================================================
-    # 🟢 SYSTEM COMMANDS (CONTROL LAYER)
-    # =================================================
+    # -----------------------------
+    # SYSTEM COMMANDS
+    # -----------------------------
     if incoming_msg.lower() in ["hi", "hello", "start"]:
-
         msg.body(
-            "👋 Welcome to AI SaaS Assistant\n\n"
-            "You can ask anything like:\n"
-            "• I need a booking system\n"
-            "• I want WhatsApp automation\n"
-            "• Build chatbot for my clinic\n\n"
-            "I will guide you automatically 🚀"
+            "👋 Welcome to Gemini SaaS Bot\n\n"
+            "Ask anything like:\n"
+            "• Build chatbot for clinic\n"
+            "• Pricing system\n"
+            "• Booking automation"
         )
         return str(response)
 
     if incoming_msg.lower() == "pricing":
-
         msg.body(
-            "💰 SaaS Plans:\n\n"
+            "💰 Plans:\n\n"
             "Starter: ₹499/month\n"
             "Pro: ₹999/month\n"
-            "Enterprise: ₹1999/month\n\n"
-            "Reply 'help' for details"
+            "Enterprise: ₹1999/month"
         )
         return str(response)
 
-    # =================================================
-    # 🧠 AI BRAIN MODE (DEFAULT)
-    # =================================================
-    ai_reply = ai_brain(incoming_msg, sender)
+    # -----------------------------
+    # 🧠 GEMINI AI RESPONSE
+    # -----------------------------
+    ai_reply = gemini_brain(incoming_msg, sender)
 
-    msg.body(f"🤖 AI Assistant:\n\n{ai_reply}")
+    msg.body(f"🤖 AI:\n\n{ai_reply}")
 
     return str(response)
 
 
 # =====================================================
-# 🚀 RUN (RENDER READY)
+# 🚀 RUN SERVER
 # =====================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
