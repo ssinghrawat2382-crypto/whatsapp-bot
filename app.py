@@ -1,184 +1,205 @@
 from flask import Flask, request, abort
 from twilio.twiml.messaging_response import MessagingResponse
-from datetime import datetime
 
 app = Flask(__name__)
 
 # =====================================================
-# 🧠 SAAS DATABASE (SIMULATED - REPLACE WITH DB LATER)
+# 🧠 USER SESSION STATE (SIMPLE SAAS DEMO MEMORY)
 # =====================================================
+user_state = {}
 
-CLIENTS = {
-    "default": {
-        "name": "AI Automation Hub",
-        "industry": "SaaS Demo",
-        "location": "India",
-        "contact": "+91-XXXXXXXXXX",
-        "timings": "9AM - 9PM"
-    },
-    "clinic1": {
-        "name": "City Health Clinic",
-        "industry": "Healthcare",
-        "location": "Delhi",
-        "contact": "+91-1111111111",
-        "timings": "24/7 Emergency"
-    },
-    "salon1": {
-        "name": "Glow Beauty Salon",
-        "industry": "Salon & Spa",
-        "location": "Delhi",
-        "contact": "+91-2222222222",
-        "timings": "10AM - 9PM"
-    }
+# =====================================================
+# 🏢 CLIENT CONFIG (FOR DEMO PURPOSE)
+# =====================================================
+CLIENT = {
+    "name": "AI Automation SaaS Demo",
+    "contact": "+91-XXXXXXXXXX",
+    "location": "India"
 }
 
 # =====================================================
-# 🧠 CLIENT DETECTION ENGINE (IMPORTANT SAAS LOGIC)
+# 🏠 HEALTH CHECK (RENDER VERIFICATION)
 # =====================================================
-
-def get_client(sender_number=None):
-    """
-    Future upgrade:
-    - Map WhatsApp number → client_id
-    - For now: default client
-    """
-    return CLIENTS["default"]
-
-# =====================================================
-# 🏠 HEALTH CHECK
-# =====================================================
-
 @app.route("/", methods=["GET"])
 def home():
-    return "SaaS WhatsApp System Running 🚀", 200
+    return "WhatsApp SaaS Bot Running 🚀", 200
+
 
 # =====================================================
-# 🔗 WEBHOOK (TWILIO ENTRY POINT)
+# 🔗 WEBHOOK VERIFICATION (TWILIO SAFETY)
 # =====================================================
+@app.route("/webhook", methods=["GET"])
+def webhook_verify():
+    """
+    Twilio or browsers may hit GET request first
+    """
+    return "Webhook Active ✅", 200
 
+
+# =====================================================
+# 📩 MAIN WHATSAPP WEBHOOK (PRODUCTION CORE)
+# =====================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
+    # -----------------------------
+    # 1. METHOD VALIDATION
+    # -----------------------------
     if request.method != "POST":
         abort(405)
 
+    # -----------------------------
+    # 2. EXTRACT DATA SAFELY
+    # -----------------------------
     incoming_msg = request.form.get("Body", "").lower().strip()
     sender = request.form.get("From", "")
 
-    client = get_client(sender)
-
+    # -----------------------------
+    # 3. INIT RESPONSE
+    # -----------------------------
     response = MessagingResponse()
     msg = response.message()
 
-    # =================================================
-    # 🌟 SAAS GREETING (DYNAMIC CLIENT DATA)
-    # =================================================
+    # -----------------------------
+    # 4. GET USER STATE
+    # -----------------------------
+    state = user_state.get(sender, 0)
 
-    if incoming_msg in ["hi", "hello", "hey", "start"]:
+    # =====================================================
+    # 🟢 STEP 0 → WELCOME SCREEN
+    # =====================================================
+    if state == 0:
         msg.body(
-            f"""👋 Welcome to {client['name']}
-
-🏢 Industry: {client['industry']}
-📍 Location: {client['location']}
-
-Choose:
-1️⃣ Services
-2️⃣ Pricing
-3️⃣ Contact
-4️⃣ Help
-"""
+            "👋 Welcome to AI SaaS Demo Bot\n\n"
+            "Choose your business type:\n"
+            "1️⃣ Clinic\n"
+            "2️⃣ Salon\n"
+            "3️⃣ Pharmacy\n\n"
+            "Reply with option number"
         )
+        user_state[sender] = 1
 
-    # =================================================
-    # 🧾 SERVICES (GENERIC SAAS MODULE)
-    # =================================================
 
-    elif incoming_msg in ["1", "services"]:
-        msg.body(
-            "🧾 Services:\n\n"
-            "• Customer Support Automation\n"
-            "• Booking System\n"
-            "• WhatsApp AI Replies\n"
-            "• Lead Collection System"
-        )
+    # =====================================================
+    # 🟡 STEP 1 → INDUSTRY SELECTION
+    # =====================================================
+    elif state == 1:
 
-    # =================================================
-    # 💰 PRICING (SAAS MONETIZATION CORE)
-    # =================================================
+        if incoming_msg == "1":
+            msg.body("🏥 Clinic selected\n\nReply YES to continue demo")
+            user_state[sender] = 2
 
-    elif incoming_msg in ["2", "pricing"]:
-        msg.body(
-            "💰 Plans:\n\n"
-            "Starter: ₹499/month\n"
-            "Business: ₹999/month\n"
-            "Pro: ₹1999/month\n\n"
-            "📌 Upgrade anytime for more features"
-        )
+        elif incoming_msg == "2":
+            msg.body("💇 Salon selected\n\nReply YES to continue demo")
+            user_state[sender] = 2
 
-    # =================================================
-    # 📞 CONTACT (DYNAMIC CLIENT DATA)
-    # =================================================
+        elif incoming_msg == "3":
+            msg.body("💊 Pharmacy selected\n\nReply YES to continue demo")
+            user_state[sender] = 2
 
-    elif incoming_msg in ["3", "contact"]:
-        msg.body(
-            f"""📞 Contact Info:
+        else:
+            msg.body("❌ Invalid option. Please choose 1, 2 or 3.")
 
-Phone: {client['contact']}
-Location: {client['location']}
-Timing: {client['timings']}"""
-        )
 
-    # =================================================
-    # 🤖 HELP / ASSISTANT MODE
-    # =================================================
+    # =====================================================
+    # 🔵 STEP 2 → CONFIRMATION
+    # =====================================================
+    elif state == 2:
 
-    elif incoming_msg in ["4", "help", "assistant"]:
-        msg.body(
-            "🤖 Assistant Mode:\n\n"
-            "Ask anything like:\n"
-            "• services\n"
-            "• pricing\n"
-            "• contact\n\n"
-            "I work 24/7 🚀"
-        )
+        if incoming_msg == "yes":
+            msg.body(
+                "⚡ Smart Automation Features:\n\n"
+                "✔ Auto replies\n"
+                "✔ Booking system\n"
+                "✔ Customer handling\n\n"
+                "Reply YES to continue"
+            )
+            user_state[sender] = 3
+        else:
+            msg.body("Please reply YES to continue demo")
 
-    # =================================================
-    # ⏰ UTILITY MODULE
-    # =================================================
 
-    elif "time" in incoming_msg:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        msg.body(f"🕒 Server Time:\n{now}")
+    # =====================================================
+    # 🟣 STEP 3 → BENEFITS
+    # =====================================================
+    elif state == 3:
 
-    # =================================================
-    # 🧠 FALLBACK AI STYLE RESPONSE
-    # =================================================
+        if incoming_msg == "yes":
+            msg.body(
+                "🚀 Business Benefits:\n\n"
+                "✔ 24/7 automation\n"
+                "✔ No missed customers\n"
+                "✔ Faster response time\n\n"
+                "Reply YES for pricing"
+            )
+            user_state[sender] = 4
+        else:
+            msg.body("Reply YES to continue")
 
+
+    # =====================================================
+    # 🟠 STEP 4 → PRICING
+    # =====================================================
+    elif state == 4:
+
+        if incoming_msg == "yes":
+            msg.body(
+                "💰 Pricing Plans:\n\n"
+                "Starter: ₹499/month\n"
+                "Pro: ₹999/month\n"
+                "Business: ₹1999/month\n\n"
+                "Reply YES for contact details"
+            )
+            user_state[sender] = 5
+        else:
+            msg.body("Reply YES to view pricing")
+
+
+    # =====================================================
+    # 🔴 STEP 5 → CONTACT
+    # =====================================================
+    elif state == 5:
+
+        if incoming_msg == "yes":
+            msg.body(
+                f"📞 Contact Sales:\n\n"
+                f"{CLIENT['contact']}\n\n"
+                "Demo completed ✅\n"
+                "Type RESTART to try again"
+            )
+            user_state[sender] = 6
+        else:
+            msg.body("Reply YES for contact details")
+
+
+    # =====================================================
+    # ⚫ STEP 6 → END / RESET FLOW
+    # =====================================================
+    elif state == 6:
+
+        if incoming_msg == "restart":
+            user_state[sender] = 0
+            msg.body("🔄 Restarting demo...\nSend hi to begin again")
+        else:
+            msg.body("Demo completed. Type RESTART to start again")
+
+
+    # =====================================================
+    # 🧠 GLOBAL FALLBACK (SAFETY LAYER)
+    # =====================================================
     else:
-        msg.body(
-            "🤖 I didn’t understand that.\n\n"
-            "Type 'hi' to see menu."
-        )
+        user_state[sender] = 0
+        msg.body("👋 Send 'hi' to start demo again")
 
+
+    # -----------------------------
+    # 5. RETURN TWILIO RESPONSE
+    # -----------------------------
     return str(response), 200
 
 
 # =====================================================
-# ⚠️ ERROR HANDLING (SAAS STABILITY)
+# 🚀 RUN SERVER (RENDER READY)
 # =====================================================
-
-@app.errorhandler(404)
-def not_found(e):
-    return "Not Found", 404
-
-@app.errorhandler(500)
-def server_error(e):
-    return "Server Error", 500
-
-
-# =====================================================
-# 🚀 RUN
-# =====================================================
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
