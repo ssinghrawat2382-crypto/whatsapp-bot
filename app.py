@@ -5,199 +5,179 @@ from datetime import datetime
 app = Flask(__name__)
 
 # =====================================================
-# 🏢 CLIENT CONFIG (EDIT ONLY THIS SECTION FOR CLIENTS)
+# 🧠 SAAS DATABASE (SIMULATED - REPLACE WITH DB LATER)
 # =====================================================
 
-CLIENT = {
-    "name": "Elite Automation Services",
-    "industry": "Multi-Service Demo",
-    "location": "Delhi, India",
-    "contact": "+91-XXXXXXXXXX",
-    "timings": "9AM - 9PM",
-    "status": "active"
+CLIENTS = {
+    "default": {
+        "name": "AI Automation Hub",
+        "industry": "SaaS Demo",
+        "location": "India",
+        "contact": "+91-XXXXXXXXXX",
+        "timings": "9AM - 9PM"
+    },
+    "clinic1": {
+        "name": "City Health Clinic",
+        "industry": "Healthcare",
+        "location": "Delhi",
+        "contact": "+91-1111111111",
+        "timings": "24/7 Emergency"
+    },
+    "salon1": {
+        "name": "Glow Beauty Salon",
+        "industry": "Salon & Spa",
+        "location": "Delhi",
+        "contact": "+91-2222222222",
+        "timings": "10AM - 9PM"
+    }
 }
 
 # =====================================================
-# 🧠 UX MENU SYSTEM
+# 🧠 CLIENT DETECTION ENGINE (IMPORTANT SAAS LOGIC)
 # =====================================================
 
-MENU = """
-👋 Welcome to {name}
-
-🏢 {industry}
-📍 {location}
-
-Choose an option:
-
-1️⃣ Services
-2️⃣ Pricing
-3️⃣ Book / Order
-4️⃣ Contact
-5️⃣ About
-6️⃣ Help Assistant
-"""
+def get_client(sender_number=None):
+    """
+    Future upgrade:
+    - Map WhatsApp number → client_id
+    - For now: default client
+    """
+    return CLIENTS["default"]
 
 # =====================================================
-# 🏠 WEBHOOK HEALTH CHECK (RENDER VERIFICATION)
+# 🏠 HEALTH CHECK
 # =====================================================
 
 @app.route("/", methods=["GET"])
 def home():
-    return f"{CLIENT['name']} WhatsApp Bot is LIVE 🚀", 200
-
-
-# =====================================================
-# 🔗 WEBHOOK VERIFICATION (OPTIONAL SAFETY CHECK)
-# =====================================================
-
-@app.route("/webhook", methods=["GET"])
-def webhook_verify():
-    """
-    Optional verification endpoint
-    Some platforms hit GET before POST
-    """
-    return "Webhook is active ✅", 200
-
+    return "SaaS WhatsApp System Running 🚀", 200
 
 # =====================================================
-# 📩 MAIN WEBHOOK (TWILIO WHATSAPP ENTRY POINT)
+# 🔗 WEBHOOK (TWILIO ENTRY POINT)
 # =====================================================
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
-    # -------------------------------
-    # 1. VALIDATE REQUEST METHOD
-    # -------------------------------
     if request.method != "POST":
         abort(405)
 
-    # -------------------------------
-    # 2. EXTRACT TWILIO DATA
-    # -------------------------------
-    incoming_msg = request.form.get("Body", "")
+    incoming_msg = request.form.get("Body", "").lower().strip()
     sender = request.form.get("From", "")
 
-    if not incoming_msg:
-        incoming_msg = ""
+    client = get_client(sender)
 
-    incoming_msg = incoming_msg.lower().strip()
-
-    # -------------------------------
-    # 3. RESPONSE OBJECT (TWILIO REQUIRED)
-    # -------------------------------
     response = MessagingResponse()
     msg = response.message()
 
-    # -------------------------------
-    # 4. BOT LOGIC (UX FLOW)
-    # -------------------------------
+    # =================================================
+    # 🌟 SAAS GREETING (DYNAMIC CLIENT DATA)
+    # =================================================
 
-    # 🌟 Greeting
     if incoming_msg in ["hi", "hello", "hey", "start"]:
         msg.body(
-            MENU.format(
-                name=CLIENT["name"],
-                industry=CLIENT["industry"],
-                location=CLIENT["location"]
-            )
+            f"""👋 Welcome to {client['name']}
+
+🏢 Industry: {client['industry']}
+📍 Location: {client['location']}
+
+Choose:
+1️⃣ Services
+2️⃣ Pricing
+3️⃣ Contact
+4️⃣ Help
+"""
         )
 
-    # 🧾 Services
+    # =================================================
+    # 🧾 SERVICES (GENERIC SAAS MODULE)
+    # =================================================
+
     elif incoming_msg in ["1", "services"]:
         msg.body(
-            "🧾 Our Services:\n\n"
-            "• Consultation\n"
+            "🧾 Services:\n\n"
             "• Customer Support Automation\n"
             "• Booking System\n"
-            "• WhatsApp Automation Setup"
+            "• WhatsApp AI Replies\n"
+            "• Lead Collection System"
         )
 
-    # 💰 Pricing
+    # =================================================
+    # 💰 PRICING (SAAS MONETIZATION CORE)
+    # =================================================
+
     elif incoming_msg in ["2", "pricing"]:
         msg.body(
-            "💰 Pricing Plans:\n\n"
-            "Basic: ₹499\n"
-            "Standard: ₹999\n"
-            "Premium: ₹1999\n\n"
-            "📌 Contact for custom setup"
+            "💰 Plans:\n\n"
+            "Starter: ₹499/month\n"
+            "Business: ₹999/month\n"
+            "Pro: ₹1999/month\n\n"
+            "📌 Upgrade anytime for more features"
         )
 
-    # 📅 Booking / Orders
-    elif incoming_msg in ["3", "book", "order"]:
+    # =================================================
+    # 📞 CONTACT (DYNAMIC CLIENT DATA)
+    # =================================================
+
+    elif incoming_msg in ["3", "contact"]:
         msg.body(
-            "📅 Booking Request Received!\n\n"
-            "Send details:\n"
-            "• Name\n"
-            "• Service/Product\n"
-            "• Time\n"
-            "• Address\n\n"
-            "We will confirm shortly ✅"
+            f"""📞 Contact Info:
+
+Phone: {client['contact']}
+Location: {client['location']}
+Timing: {client['timings']}"""
         )
 
-    # 📞 Contact
-    elif incoming_msg in ["4", "contact"]:
-        msg.body(
-            f"📞 Contact Info:\n\n"
-            f"Phone: {CLIENT['contact']}\n"
-            f"Location: {CLIENT['location']}\n"
-            f"Timing: {CLIENT['timings']}"
-        )
+    # =================================================
+    # 🤖 HELP / ASSISTANT MODE
+    # =================================================
 
-    # ℹ️ About
-    elif incoming_msg in ["5", "about"]:
-        msg.body(
-            f"🏢 About {CLIENT['name']}:\n\n"
-            "We provide automated WhatsApp customer handling systems "
-            "for modern businesses."
-        )
-
-    # 🤖 Help Assistant Mode
-    elif incoming_msg in ["6", "help", "assistant"]:
+    elif incoming_msg in ["4", "help", "assistant"]:
         msg.body(
             "🤖 Assistant Mode:\n\n"
-            "Ask me anything like:\n"
+            "Ask anything like:\n"
             "• services\n"
             "• pricing\n"
-            "• booking\n"
             "• contact\n\n"
-            "I am here 24/7 🚀"
+            "I work 24/7 🚀"
         )
 
-    # ⏰ Time Utility
+    # =================================================
+    # ⏰ UTILITY MODULE
+    # =================================================
+
     elif "time" in incoming_msg:
-        now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         msg.body(f"🕒 Server Time:\n{now}")
 
-    # 🧠 Default fallback (important UX)
+    # =================================================
+    # 🧠 FALLBACK AI STYLE RESPONSE
+    # =================================================
+
     else:
         msg.body(
-            "🤖 Sorry, I didn’t understand that.\n\n"
-            "Type 'hi' to see menu options."
+            "🤖 I didn’t understand that.\n\n"
+            "Type 'hi' to see menu."
         )
 
-    # -------------------------------
-    # 5. RETURN TWILIO RESPONSE (IMPORTANT WEBHOOK FORMALITY)
-    # -------------------------------
     return str(response), 200
 
 
 # =====================================================
-# ⚠️ ERROR HANDLERS (PRODUCTION SAFETY)
+# ⚠️ ERROR HANDLING (SAAS STABILITY)
 # =====================================================
 
 @app.errorhandler(404)
 def not_found(e):
-    return "Route not found", 404
-
+    return "Not Found", 404
 
 @app.errorhandler(500)
 def server_error(e):
-    return "Internal server error", 500
+    return "Server Error", 500
 
 
 # =====================================================
-# 🚀 RUN SERVER (RENDER COMPATIBLE)
+# 🚀 RUN
 # =====================================================
 
 if __name__ == "__main__":
