@@ -8,12 +8,15 @@ app = Flask(__name__)
 # =====================================================
 # 🔐 GEMINI CONFIG
 # =====================================================
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # =====================================================
-# 🧠 SIMPLE MEMORY (OPTIONAL)
+# 🧠 SIMPLE MEMORY (SAFE)
 # =====================================================
 user_memory = {}
 
@@ -22,97 +25,128 @@ user_memory = {}
 # =====================================================
 @app.route("/", methods=["GET"])
 def home():
-    return "Gemini SaaS Bot Running 🚀", 200
+    return "AI SaaS Bot Running 🚀", 200
 
 # =====================================================
-# 🔗 WEBHOOK CHECK
+# 🔗 WEBHOOK TEST
 # =====================================================
 @app.route("/webhook", methods=["GET"])
-def verify():
+def webhook_test():
     return "Webhook Active ✅", 200
 
 # =====================================================
-# 🤖 GEMINI AI BRAIN
+# 🧠 GEMINI AI FUNCTION (SAFE + CONTROLLED)
 # =====================================================
-def gemini_brain(user_msg, user_id):
+def gemini_reply(user_msg, sender):
 
     try:
-        context = user_memory.get(user_id, "")
+        if not GEMINI_API_KEY:
+            return "⚠️ AI not configured (missing GEMINI_API_KEY)"
+
+        context = user_memory.get(sender, "")
 
         prompt = f"""
-You are a WhatsApp SaaS assistant for businesses.
+You are a WhatsApp SaaS assistant.
 
-Context:
-{context}
+Context: {context}
 
-User message:
-{user_msg}
+User message: {user_msg}
 
 Rules:
-- Give short, clear business answers
-- Focus on automation, booking, pricing, support
+- Keep answers short
+- Focus on business (booking, pricing, automation)
 """
 
         response = model.generate_content(prompt)
 
-        reply = response.text
+        reply = response.text if response and response.text else "⚠️ No response from AI"
 
-        user_memory[user_id] = user_msg
+        user_memory[sender] = user_msg
 
         return reply
 
     except Exception as e:
-        return "⚠️ AI temporarily unavailable"
+        print("AI ERROR:", str(e))  # IMPORTANT FOR RENDER DEBUG
+        return "⚠️ AI service temporarily unavailable"
+
 
 # =====================================================
-# 📩 WEBHOOK (SAAS + GEMINI)
+# 📩 MAIN WEBHOOK (ROBUST VERSION)
 # =====================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
-    if request.method != "POST":
-        abort(405)
+    try:
+        # -----------------------------
+        # SAFE DATA EXTRACTION
+        # -----------------------------
+        incoming_msg = request.form.get("Body", "")
+        sender = request.form.get("From", "")
 
-    incoming_msg = request.form.get("Body", "").strip()
-    sender = request.form.get("From", "")
+        print("Incoming:", sender, incoming_msg)  # DEBUG LOG
 
-    response = MessagingResponse()
-    msg = response.message()
+        # -----------------------------
+        # RESPONSE OBJECT
+        # -----------------------------
+        response = MessagingResponse()
+        msg = response.message()
 
-    # -----------------------------
-    # SYSTEM COMMANDS
-    # -----------------------------
-    if incoming_msg.lower() in ["hi", "hello", "start"]:
-        msg.body(
-            "👋 Welcome to Gemini SaaS Bot\n\n"
-            "Ask anything like:\n"
-            "• Build chatbot for clinic\n"
-            "• Pricing system\n"
-            "• Booking automation"
-        )
+        if not incoming_msg:
+            msg.body("⚠️ Empty message received")
+            return str(response)
+
+        text = incoming_msg.lower().strip()
+
+        # -----------------------------
+        # SYSTEM COMMANDS
+        # -----------------------------
+        if text in ["hi", "hello", "start"]:
+
+            msg.body(
+                "👋 Welcome to AI SaaS Bot\n\n"
+                "You can ask:\n"
+                "• Build chatbot\n"
+                "• Pricing\n"
+                "• Automation help"
+            )
+            return str(response)
+
+        if text == "pricing":
+
+            msg.body(
+                "💰 Plans:\n\n"
+                "Starter: ₹499/month\n"
+                "Pro: ₹999/month\n"
+                "Enterprise: ₹1999/month"
+            )
+            return str(response)
+
+        if text == "restart":
+            user_memory[sender] = ""
+            msg.body("🔄 Reset done. Send hi to start again.")
+            return str(response)
+
+        # -----------------------------
+        # 🧠 AI BRAIN RESPONSE
+        # -----------------------------
+        ai_text = gemini_reply(incoming_msg, sender)
+
+        msg.body(f"🤖 AI:\n\n{ai_text}")
+
         return str(response)
 
-    if incoming_msg.lower() == "pricing":
-        msg.body(
-            "💰 Plans:\n\n"
-            "Starter: ₹499/month\n"
-            "Pro: ₹999/month\n"
-            "Enterprise: ₹1999/month"
-        )
+    except Exception as e:
+        print("WEBHOOK ERROR:", str(e))  # CRITICAL LOGGING
+
+        response = MessagingResponse()
+        response.message("⚠️ Server error. Try again later.")
+
         return str(response)
-
-    # -----------------------------
-    # 🧠 GEMINI AI RESPONSE
-    # -----------------------------
-    ai_reply = gemini_brain(incoming_msg, sender)
-
-    msg.body(f"🤖 AI:\n\n{ai_reply}")
-
-    return str(response)
 
 
 # =====================================================
-# 🚀 RUN SERVER
+# 🚀 RUN APP
 # =====================================================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
