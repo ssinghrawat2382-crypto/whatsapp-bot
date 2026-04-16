@@ -1,152 +1,134 @@
-from flask import Flask, request, abort
+from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import os
 import google.generativeai as genai
+import traceback
+import time
 
 app = Flask(__name__)
 
-# =====================================================
-# 🔐 GEMINI CONFIG
-# =====================================================
+# =========================
+# GEMINI SETUP
+# =========================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+model = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+    except Exception as e:
+        print("GEMINI INIT ERROR:", e)
 
-model = genai.GenerativeModel("gemini-1.5-flash")
-
-# =====================================================
-# 🧠 SIMPLE MEMORY (SAFE)
-# =====================================================
+# =========================
+# MEMORY (simple)
+# =========================
 user_memory = {}
 
-# =====================================================
-# 🏠 HEALTH CHECK
-# =====================================================
+# =========================
+# HOME
+# =========================
 @app.route("/", methods=["GET"])
 def home():
-    return "AI SaaS Bot Running 🚀", 200
+    return "AI Bot Running 🚀", 200
 
-# =====================================================
-# 🔗 WEBHOOK TEST
-# =====================================================
-@app.route("/webhook", methods=["GET"])
-def webhook_test():
-    return "Webhook Active ✅", 200
 
-# =====================================================
-# 🧠 GEMINI AI FUNCTION (SAFE + CONTROLLED)
-# =====================================================
+# =========================
+# SAFE GEMINI CALL (WITH TIME LIMIT)
+# =========================
 def gemini_reply(user_msg, sender):
 
     try:
-        if not GEMINI_API_KEY:
-            return "⚠️ AI not configured (missing GEMINI_API_KEY)"
+        if model is None:
+            return "⚠️ AI not configured"
 
         context = user_memory.get(sender, "")
 
         prompt = f"""
-You are a WhatsApp SaaS assistant.
+You are a WhatsApp assistant.
 
 Context: {context}
+User: {user_msg}
 
-User message: {user_msg}
-
-Rules:
-- Keep answers short
-- Focus on business (booking, pricing, automation)
+Reply short and helpful.
 """
 
+        # ---- TIME SAFETY ----
+        start = time.time()
         response = model.generate_content(prompt)
 
-        reply = response.text if response and response.text else "⚠️ No response from AI"
+        if time.time() - start > 8:
+            return "⚠️ AI timeout (too slow)"
+
+        text = getattr(response, "text", None)
+
+        if not text:
+            return "⚠️ Empty AI response"
 
         user_memory[sender] = user_msg
-
-        return reply
+        return text
 
     except Exception as e:
-        print("AI ERROR:", str(e))  # IMPORTANT FOR RENDER DEBUG
-        return "⚠️ AI service temporarily unavailable"
+        print("AI ERROR:", e)
+        return "⚠️ AI temporarily unavailable"
 
 
-# =====================================================
-# 📩 MAIN WEBHOOK (ROBUST VERSION)
-# =====================================================
+# =========================
+# WEBHOOK (GUARANTEED RESPONSE)
+# =========================
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
+    resp = MessagingResponse()
+    msg = resp.message()
+
     try:
-        # -----------------------------
-        # SAFE DATA EXTRACTION
-        # -----------------------------
-        incoming_msg = request.form.get("Body", "")
-        sender = request.form.get("From", "")
+        incoming = request.values.get("Body", "")
+        sender = request.values.get("From", "")
 
-        print("Incoming:", sender, incoming_msg)  # DEBUG LOG
+        print("INCOMING:", sender, incoming)
 
-        # -----------------------------
-        # RESPONSE OBJECT
-        # -----------------------------
-        response = MessagingResponse()
-        msg = response.message()
+        if not incoming:
+            msg.body("⚠️ No message received")
+            return str(resp)
 
-        if not incoming_msg:
-            msg.body("⚠️ Empty message received")
-            return str(response)
+        text = incoming.lower().strip()
 
-        text = incoming_msg.lower().strip()
-
-        # -----------------------------
-        # SYSTEM COMMANDS
-        # -----------------------------
+        # ---------------- COMMANDS ----------------
         if text in ["hi", "hello", "start"]:
-
-            msg.body(
-                "👋 Welcome to AI SaaS Bot\n\n"
-                "You can ask:\n"
-                "• Build chatbot\n"
-                "• Pricing\n"
-                "• Automation help"
-            )
-            return str(response)
+            msg.body("👋 Hello! Bot is active.")
+            return str(resp)
 
         if text == "pricing":
-
-            msg.body(
-                "💰 Plans:\n\n"
-                "Starter: ₹499/month\n"
-                "Pro: ₹999/month\n"
-                "Enterprise: ₹1999/month"
-            )
-            return str(response)
+            msg.body("💰 Plans:\nStarter ₹499\nPro ₹999\nEnterprise ₹1999")
+            return str(resp)
 
         if text == "restart":
             user_memory[sender] = ""
-            msg.body("🔄 Reset done. Send hi to start again.")
-            return str(response)
+            msg.body("🔄 Reset done")
+            return str(resp)
 
-        # -----------------------------
-        # 🧠 AI BRAIN RESPONSE
-        # -----------------------------
-        ai_text = gemini_reply(incoming_msg, sender)
+        # ---------------- AI RESPONSE ----------------
+        ai_text = gemini_reply(incoming, sender)
 
-        msg.body(f"🤖 AI:\n\n{ai_text}")
+        # FINAL SAFETY FALLBACK
+        if not ai_text:
+            ai_text = "⚠️ Default fallback response"
 
-        return str(response)
+        msg.body(f"🤖 {ai_text}")
+
+        return str(resp)
 
     except Exception as e:
-        print("WEBHOOK ERROR:", str(e))  # CRITICAL LOGGING
+        print("WEBHOOK ERROR:", e)
+        print(traceback.format_exc())
 
-        response = MessagingResponse()
-        response.message("⚠️ Server error. Try again later.")
+        # GUARANTEED RESPONSE (NEVER FAILS)
+        msg.body("⚠️ Server error but bot is running")
 
-        return str(response)
+        return str(resp)
 
 
-# =====================================================
-# 🚀 RUN APP
-# =====================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
