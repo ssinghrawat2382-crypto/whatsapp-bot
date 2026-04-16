@@ -1,205 +1,128 @@
 from flask import Flask, request, abort
 from twilio.twiml.messaging_response import MessagingResponse
+import os
+import openai
 
 app = Flask(__name__)
 
 # =====================================================
-# 🧠 USER SESSION STATE (SIMPLE SAAS DEMO MEMORY)
+# 🔐 OPENAI CONFIG (AI BRAIN)
 # =====================================================
-user_state = {}
+openai.api_key = os.getenv("OPENAI_API_KEY")  # set in Render
 
 # =====================================================
-# 🏢 CLIENT CONFIG (FOR DEMO PURPOSE)
+# 🧠 SIMPLE SESSION MEMORY (OPTIONAL)
 # =====================================================
-CLIENT = {
-    "name": "AI Automation SaaS Demo",
-    "contact": "+91-XXXXXXXXXX",
-    "location": "India"
-}
+user_memory = {}
 
 # =====================================================
-# 🏠 HEALTH CHECK (RENDER VERIFICATION)
+# 🏠 HEALTH CHECK
 # =====================================================
 @app.route("/", methods=["GET"])
 def home():
-    return "WhatsApp SaaS Bot Running 🚀", 200
-
+    return "AI SaaS WhatsApp Bot Running 🚀", 200
 
 # =====================================================
-# 🔗 WEBHOOK VERIFICATION (TWILIO SAFETY)
+# 🔗 WEBHOOK VERIFICATION
 # =====================================================
 @app.route("/webhook", methods=["GET"])
-def webhook_verify():
-    """
-    Twilio or browsers may hit GET request first
-    """
+def verify():
     return "Webhook Active ✅", 200
 
+# =====================================================
+# 🤖 AI BRAIN FUNCTION
+# =====================================================
+def ai_brain(user_msg, user_id):
+    try:
+
+        context = user_memory.get(user_id, "")
+
+        prompt = f"""
+You are a WhatsApp SaaS assistant for business automation.
+
+Context:
+{context}
+
+User message:
+{user_msg}
+
+Rules:
+- Be short and professional
+- Focus on business automation (appointments, sales, support)
+- Give structured replies
+"""
+
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a SaaS WhatsApp business assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        reply = response["choices"][0]["message"]["content"]
+
+        # store context (light memory)
+        user_memory[user_id] = user_msg
+
+        return reply
+
+    except Exception as e:
+        return "⚠️ AI service temporarily unavailable. Please try again."
 
 # =====================================================
-# 📩 MAIN WHATSAPP WEBHOOK (PRODUCTION CORE)
+# 📩 MAIN WEBHOOK (SAAS + AI HYBRID)
 # =====================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
-    # -----------------------------
-    # 1. METHOD VALIDATION
-    # -----------------------------
     if request.method != "POST":
         abort(405)
 
-    # -----------------------------
-    # 2. EXTRACT DATA SAFELY
-    # -----------------------------
-    incoming_msg = request.form.get("Body", "").lower().strip()
+    incoming_msg = request.form.get("Body", "").strip()
     sender = request.form.get("From", "")
 
-    # -----------------------------
-    # 3. INIT RESPONSE
-    # -----------------------------
     response = MessagingResponse()
     msg = response.message()
 
-    # -----------------------------
-    # 4. GET USER STATE
-    # -----------------------------
-    state = user_state.get(sender, 0)
+    # =================================================
+    # 🟢 SYSTEM COMMANDS (CONTROL LAYER)
+    # =================================================
+    if incoming_msg.lower() in ["hi", "hello", "start"]:
 
-    # =====================================================
-    # 🟢 STEP 0 → WELCOME SCREEN
-    # =====================================================
-    if state == 0:
         msg.body(
-            "👋 Welcome to AI SaaS Demo Bot\n\n"
-            "Choose your business type:\n"
-            "1️⃣ Clinic\n"
-            "2️⃣ Salon\n"
-            "3️⃣ Pharmacy\n\n"
-            "Reply with option number"
+            "👋 Welcome to AI SaaS Assistant\n\n"
+            "You can ask anything like:\n"
+            "• I need a booking system\n"
+            "• I want WhatsApp automation\n"
+            "• Build chatbot for my clinic\n\n"
+            "I will guide you automatically 🚀"
         )
-        user_state[sender] = 1
+        return str(response)
 
+    if incoming_msg.lower() == "pricing":
 
-    # =====================================================
-    # 🟡 STEP 1 → INDUSTRY SELECTION
-    # =====================================================
-    elif state == 1:
+        msg.body(
+            "💰 SaaS Plans:\n\n"
+            "Starter: ₹499/month\n"
+            "Pro: ₹999/month\n"
+            "Enterprise: ₹1999/month\n\n"
+            "Reply 'help' for details"
+        )
+        return str(response)
 
-        if incoming_msg == "1":
-            msg.body("🏥 Clinic selected\n\nReply YES to continue demo")
-            user_state[sender] = 2
+    # =================================================
+    # 🧠 AI BRAIN MODE (DEFAULT)
+    # =================================================
+    ai_reply = ai_brain(incoming_msg, sender)
 
-        elif incoming_msg == "2":
-            msg.body("💇 Salon selected\n\nReply YES to continue demo")
-            user_state[sender] = 2
+    msg.body(f"🤖 AI Assistant:\n\n{ai_reply}")
 
-        elif incoming_msg == "3":
-            msg.body("💊 Pharmacy selected\n\nReply YES to continue demo")
-            user_state[sender] = 2
-
-        else:
-            msg.body("❌ Invalid option. Please choose 1, 2 or 3.")
-
-
-    # =====================================================
-    # 🔵 STEP 2 → CONFIRMATION
-    # =====================================================
-    elif state == 2:
-
-        if incoming_msg == "yes":
-            msg.body(
-                "⚡ Smart Automation Features:\n\n"
-                "✔ Auto replies\n"
-                "✔ Booking system\n"
-                "✔ Customer handling\n\n"
-                "Reply YES to continue"
-            )
-            user_state[sender] = 3
-        else:
-            msg.body("Please reply YES to continue demo")
-
-
-    # =====================================================
-    # 🟣 STEP 3 → BENEFITS
-    # =====================================================
-    elif state == 3:
-
-        if incoming_msg == "yes":
-            msg.body(
-                "🚀 Business Benefits:\n\n"
-                "✔ 24/7 automation\n"
-                "✔ No missed customers\n"
-                "✔ Faster response time\n\n"
-                "Reply YES for pricing"
-            )
-            user_state[sender] = 4
-        else:
-            msg.body("Reply YES to continue")
-
-
-    # =====================================================
-    # 🟠 STEP 4 → PRICING
-    # =====================================================
-    elif state == 4:
-
-        if incoming_msg == "yes":
-            msg.body(
-                "💰 Pricing Plans:\n\n"
-                "Starter: ₹499/month\n"
-                "Pro: ₹999/month\n"
-                "Business: ₹1999/month\n\n"
-                "Reply YES for contact details"
-            )
-            user_state[sender] = 5
-        else:
-            msg.body("Reply YES to view pricing")
-
-
-    # =====================================================
-    # 🔴 STEP 5 → CONTACT
-    # =====================================================
-    elif state == 5:
-
-        if incoming_msg == "yes":
-            msg.body(
-                f"📞 Contact Sales:\n\n"
-                f"{CLIENT['contact']}\n\n"
-                "Demo completed ✅\n"
-                "Type RESTART to try again"
-            )
-            user_state[sender] = 6
-        else:
-            msg.body("Reply YES for contact details")
-
-
-    # =====================================================
-    # ⚫ STEP 6 → END / RESET FLOW
-    # =====================================================
-    elif state == 6:
-
-        if incoming_msg == "restart":
-            user_state[sender] = 0
-            msg.body("🔄 Restarting demo...\nSend hi to begin again")
-        else:
-            msg.body("Demo completed. Type RESTART to start again")
-
-
-    # =====================================================
-    # 🧠 GLOBAL FALLBACK (SAFETY LAYER)
-    # =====================================================
-    else:
-        user_state[sender] = 0
-        msg.body("👋 Send 'hi' to start demo again")
-
-
-    # -----------------------------
-    # 5. RETURN TWILIO RESPONSE
-    # -----------------------------
-    return str(response), 200
+    return str(response)
 
 
 # =====================================================
-# 🚀 RUN SERVER (RENDER READY)
+# 🚀 RUN (RENDER READY)
 # =====================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
